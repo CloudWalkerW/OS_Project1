@@ -93,12 +93,22 @@ int main(int argc, char const *argv[]){
 	int running_proc = -1;
 	int finish = 0;
 	int rr_time = 0;
+	int rr_queue[100];
+	for (int i = 0; i < n; i++){
+		rr_queue[i] = -1;
+	}
+	int rr_del = 0;
+	int rr_add = 0;
 	while(1){
 		if (running_proc != -1 && pcs[running_proc].exec_time == 0){
 			syscall(335 , pcs[running_proc].start_time , pcs[running_proc].pid);
 			waitpid(pcs[running_proc].pid , NULL , 0);
 			printf("%s %d\n", pcs[running_proc].id , pcs[running_proc].pid);
 			fflush(stdout);
+			if (policy_no == RR){
+				rr_queue[rr_del] = -1;
+				rr_del = (rr_del + 1) % 100;
+			}
 			running_proc = -1;
 			finish++;
 			if (finish == n) break;
@@ -108,8 +118,14 @@ int main(int argc, char const *argv[]){
 				pcs[i].start_time = syscall(334);
 				pcs[i].pid = execute(pcs[i]);
 				block(pcs[i].pid);
+				if (policy_no == RR){
+					rr_queue[rr_add] = i;
+					rr_add = (rr_add + 1) % 100;
+				}
 			}
 		}
+		// if (pcs[0].pid == 1)
+		// 	printf("%d\n", ntime);
 		int next_proc = -1;
 		switch(policy_no){
 			case FIFO:{
@@ -126,19 +142,18 @@ int main(int argc, char const *argv[]){
 				break;
 			}
 			case RR:{
+				// if (pcs[0].pid == 1)
+				// 	printf("%d\n", ntime);
 				if (running_proc == -1){
-					for (int i = 0; i < n; i++){
-						if (pcs[i].pid != -1 && pcs[i].exec_time > 0){
-							next_proc = i;
-							break;
-						}
+					if (rr_queue[rr_del] != -1){
+						next_proc = rr_queue[rr_del];
 					}
 				}
 				else if ((ntime - rr_time) % 500 == 0){
-					next_proc = (running_proc + 1) % n;
-					while (pcs[next_proc].pid == -1 || pcs[next_proc].exec_time == 0){
-						next_proc = (next_proc + 1) % n;
-					}
+					rr_queue[rr_add] = running_proc;
+					rr_add = (rr_add + 1) % 100;
+					rr_del = (rr_del + 1) % 100;
+					next_proc = rr_queue[rr_del];
 				}
 				else{
 					next_proc = running_proc;
